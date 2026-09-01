@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Coffee outline adapted from Feather Icons' Coffee icon (MIT).
+  Source and full license: ../ATTRIBUTIONS.md
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="118" y1="74" x2="894" y2="964" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#405DE6"/>
+      <stop offset="0.48" stop-color="#6787F7"/>
+      <stop offset="1" stop-color="#AEC7FF"/>
+    </linearGradient>
+    <linearGradient id="cup" x1="360" y1="322" x2="684" y2="746" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E7EDFF"/>
+    </linearGradient>
+    <linearGradient id="coffee" x1="512" y1="404" x2="512" y2="536" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8E5A3C"/>
+      <stop offset="1" stop-color="#5B3525"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="100%" height="100%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="24"/>
+      <feOffset dy="28"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.22"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="38" y="38" width="948" height="948" rx="226" fill="url(#background)"/>
+  <ellipse cx="512" cy="792" rx="286" ry="58" fill="#2E4B9A" opacity="0.20"/>
+
+  <g filter="url(#shadow)" stroke="#23376D" stroke-linecap="round" stroke-linejoin="round" stroke-width="42">
+    <path d="M350 390H675V640A126 126 0 0 1 549 766H476A126 126 0 0 1 350 640Z" fill="url(#cup)"/>
+    <path d="M675 432H714A95 95 0 0 1 714 622H675" fill="none"/>
+    <path d="M384 428H641V490H384Z" fill="url(#coffee)" stroke="none"/>
+    <path d="M418 277V331" fill="none"/>
+    <path d="M512 250V331" fill="none"/>
+    <path d="M606 277V331" fill="none"/>
+  </g>
+
+  <path d="M432 580C456 621 497 642 546 642" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-width="26" opacity="0.62"/>
+</svg>
