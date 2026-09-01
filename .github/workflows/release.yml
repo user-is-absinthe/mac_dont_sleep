@@ -18,16 +18,14 @@ jobs:
       - name: Build universal app
         run: ./build_app.command
 
-      - name: Zip app bundle
-        run: |
-          cd build
-          ditto -c -k --sequesterRsrc --keepParent "Don't sleep.app" "DontSleep-${GITHUB_REF_NAME}.zip"
+      - name: Package DMG
+        run: ./scripts/make_dmg.sh "build/DontSleep-${GITHUB_REF_NAME}.dmg"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "build/DontSleep-${GITHUB_REF_NAME}.zip" \
+            "build/DontSleep-${GITHUB_REF_NAME}.dmg" \
             --title "Don't sleep ${GITHUB_REF_NAME}" \
             --generate-notes

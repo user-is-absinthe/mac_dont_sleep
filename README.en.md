@@ -23,7 +23,7 @@ A small native macOS app that keeps your Mac awake for a selected amount of time
 
 ## Download
 
-Prebuilt binaries are available on the [Releases](https://github.com/user-is-absinthe/mac_dont_sleep/releases) page—unzip the archive and drag the app into your Applications folder. No need to build the project yourself.
+Prebuilt binaries are available on the [Releases](https://github.com/user-is-absinthe/mac_dont_sleep/releases) page. Open the downloaded DMG image and drag the app onto the **Applications** link next to it—it will be installed into your Applications folder. No need to build the project yourself.
 
 The app is ad-hoc signed (no Apple Developer ID), so macOS may show a Gatekeeper warning the first time you open a downloaded copy. Remove the quarantine flag with:
 
@@ -65,7 +65,7 @@ The app owns the child process. Cancelling the timer or quitting the app termina
 Sources/                  SwiftUI application source
 Resources/                App icon, Info.plist, and source artwork
 legacy/                   Original Terminal-based script
-scripts/                  Utility used to create the ICNS app icon
+scripts/                  Utilities: ICNS icon creation and DMG packaging
 build_app.command         Builds and signs the local universal .app bundle
 ```
 
