@@ -2,7 +2,7 @@
 
 [🇬🇧 English](README.en.md)
 
-![Иконка приложения: чашка кофе](Resources/AppIcon.png)
+<img src="Resources/AppIcon.png" alt="Иконка приложения: чашка кофе" height="56">
 
 Небольшое нативное macOS-приложение, которое не даёт вашему Mac уснуть в течение выбранного времени. Это удобный интерфейс для встроенной утилиты [`caffeinate`](https://ss64.com/mac/caffeinate.html) — без фоновых служб, пакетов Homebrew и сторонних утилит для уведомлений.
 

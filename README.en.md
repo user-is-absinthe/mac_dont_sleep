@@ -2,7 +2,7 @@
 
 [🇷🇺 Русская версия](README.md)
 
-![Coffee cup app icon](Resources/AppIcon.png)
+<img src="Resources/AppIcon.png" alt="Coffee cup app icon" height="56">
 
 A small native macOS app that keeps your Mac awake for a selected amount of time. It provides a friendly interface for the built-in [`caffeinate`](https://ss64.com/mac/caffeinate.html) utility—no background services, Homebrew packages, or third-party notification tools required.
 
