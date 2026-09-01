@@ -21,6 +21,16 @@ A small native macOS app that keeps your Mac awake for a selected amount of time
 - macOS 13 Ventura or newer
 - Apple Command Line Tools (`xcode-select --install`)
 
+## Download
+
+Prebuilt binaries are available on the [Releases](https://github.com/user-is-absinthe/mac_dont_sleep/releases) page—unzip the archive and drag the app into your Applications folder. No need to build the project yourself.
+
+The app is ad-hoc signed (no Apple Developer ID), so macOS may show a Gatekeeper warning the first time you open a downloaded copy. Remove the quarantine flag with:
+
+```zsh
+xattr -cr "/Applications/Don't sleep.app"
+```
+
 ## Build and run
 
 1. Clone or download this repository.

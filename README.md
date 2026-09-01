@@ -21,6 +21,16 @@
 - macOS 13 Ventura или новее
 - Apple Command Line Tools (`xcode-select --install`)
 
+## Скачивание
+
+Готовую сборку можно скачать со страницы [Releases](https://github.com/user-is-absinthe/mac_dont_sleep/releases) — распакуйте архив и перетащите приложение в «Программы». Собирать проект самостоятельно не обязательно.
+
+Приложение подписано ad-hoc-подписью (без Apple Developer ID), поэтому при первом запуске скачанной копии macOS может показать предупреждение системы безопасности Gatekeeper. Снимите карантин командой:
+
+```zsh
+xattr -cr "/Applications/Don't sleep.app"
+```
+
 ## Сборка и запуск
 
 1. Склонируйте или скачайте этот репозиторий.
