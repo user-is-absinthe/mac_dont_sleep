@@ -308,9 +308,17 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: controller.isRunning ? "moon.zzz.fill" : "moon.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(controller.statusColor)
+                ZStack {
+                    Image(systemName: "moon.zzz.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.blue)
+                    if controller.isRunning {
+                        Image(systemName: "nosign")
+                            .font(.system(size: 38))
+                            .foregroundStyle(.red)
+                    }
+                }
+                .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Не давать Mac спать")
