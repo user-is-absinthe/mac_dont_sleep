@@ -14,10 +14,16 @@ STAGING="$ROOT/build/dmg-staging"
 TMP_DMG="$ROOT/build/dont-sleep-rw.dmg"
 OUT_DMG="${1:-$ROOT/build/Don't sleep.dmg}"
 VOLNAME="Don't sleep"
+BG_SRC="$ROOT/Resources/dmg-background.png"
 
 if [ ! -d "$APP_PATH" ]; then
   echo "Приложение не найдено: $APP_PATH" >&2
   echo "Сначала соберите его: ./build_app.command" >&2
+  exit 1
+fi
+
+if [ ! -f "$BG_SRC" ]; then
+  echo "Фон DMG не найден: $BG_SRC" >&2
   exit 1
 fi
 
@@ -36,9 +42,15 @@ hdiutil create -volname "$VOLNAME" -fs HFS+ -srcfolder "$STAGING" -ov -format UD
 MOUNT="$(hdiutil attach "$TMP_DMG" -nobrowse | grep -o '/Volumes/.*' | tail -1)"
 DISK_NAME="$(basename "$MOUNT")"
 
+# Кладём фон в скрытую папку внутри образа, чтобы ссылка на него
+# оставалась валидной на любой машине.
+mkdir -p "$MOUNT/.background"
+cp "$BG_SRC" "$MOUNT/.background/background.png"
+
 # 4. Расставляем иконки (best effort: нужен GUI-сеанс и разрешение
 #    на управление Finder; без этого раскладка останется стандартной).
 if osascript <<APPLESCRIPT; then
+set bgFile to POSIX file "$MOUNT/.background/background.png"
 tell application "Finder"
   tell disk "$DISK_NAME"
     open
@@ -49,6 +61,7 @@ tell application "Finder"
     set theViewOptions to the icon view options of container window
     set arrangement of theViewOptions to not arranged
     set icon size of theViewOptions to 96
+    set background picture of theViewOptions to bgFile
     set position of item "Don't sleep.app" of container window to {150, 190}
     set position of item "Applications" of container window to {370, 190}
     close
