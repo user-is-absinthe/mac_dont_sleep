@@ -12,10 +12,35 @@ struct DontSleepApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(controller)
+                .background(WindowFrameRestorer())
                 .onAppear {
                     notificationDelegate.sleepController = controller
                 }
         }
+    }
+}
+
+/// Сохраняет размер и положение окна между запусками приложения
+/// (штатный механизм AppKit — NSWindow Frame Autosave).
+private struct WindowFrameRestorer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        Task { @MainActor in
+            view.attachToWindowForFrameAutosave()
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.attachToWindowForFrameAutosave()
+    }
+}
+
+private extension NSView {
+    func attachToWindowForFrameAutosave() {
+        guard let window, window.frameAutosaveName.isEmpty else { return }
+        window.setFrameAutosaveName("MainWindow")
+        window.setFrameUsingName("MainWindow")
     }
 }
 
