@@ -20,7 +20,7 @@ A small native macOS app that keeps your Mac awake for a selected amount of time
 
 | Timer active | Regular power plan |
 | --- | --- |
-| ![App active: the timer keeps the Mac awake](screenshots/on.png) | ![App inactive: the Mac follows its regular power plan](screenshots/off.png) |
+| <img src="screenshots/on.png" width="400" alt="App active: the timer keeps the Mac awake"> | <img src="screenshots/off.png" width="400" alt="App inactive: the Mac follows its regular power plan"> |
 
 ## Requirements
 
