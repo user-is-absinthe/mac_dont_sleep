@@ -16,6 +16,12 @@ A small native macOS app that keeps your Mac awake for a selected amount of time
 - Native macOS notification when the timer ends.
 - Universal binary for Apple Silicon and Intel Macs.
 
+## Screenshots
+
+| Timer active | Regular power plan |
+| --- | --- |
+| ![App active: the timer keeps the Mac awake](screenshots/on.png) | ![App inactive: the Mac follows its regular power plan](screenshots/off.png) |
+
 ## Requirements
 
 - macOS 13 Ventura or newer
