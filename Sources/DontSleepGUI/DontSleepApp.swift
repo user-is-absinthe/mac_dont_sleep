@@ -339,16 +339,20 @@ final class SleepController: ObservableObject {
 /// (мышь, клавиатура, трекпад) возвращает яркость и перезапускает отсчёт.
 @MainActor
 final class DimController: ObservableObject {
+    /// Максимальная непрозрачность затемняющего слоя (0.9 ≈ минимальная яркость).
+    private static let maxDimAlpha: CGFloat = 0.9
+
     @Published private(set) var isEnabled = false
     @Published var minutesText = "5"
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var isDimmed = false
+    @Published private(set) var mainProtectionActive = false
     @Published private(set) var validationMessage = ""
 
     private var timer: Timer?
     private var deadline: Date?
     private var lastIdleSeconds: Double = 0
-    private var savedBrightness: Float?
+    private var overlayWindows: [NSWindow] = []
 
     var intervalSeconds: Int {
         let trimmed = minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -367,7 +371,10 @@ final class DimController: ObservableObject {
         if isDimmed {
             return "Экран затемнён — двигайте мышью или нажмите клавишу, чтобы вернуть яркость."
         }
-        let minutes = intervalSeconds
+        if isEnabled && !mainProtectionActive {
+            return "Отсчёт начнётся, когда будет включён режим «Не давать Mac спать»."
+        }
+        let minutes = intervalSeconds / 60
         return minutes > 0
             ? "Экран будет затемнён после \(minutes) мин бездействия. Любая активность перезапускает отсчёт."
             : "Введите положительное целое число минут."
@@ -375,7 +382,7 @@ final class DimController: ObservableObject {
 
     func setEnabled(_ enabled: Bool) {
         guard enabled else {
-            stop()
+            stopCompletely()
             return
         }
         guard intervalSeconds > 0 else {
@@ -383,18 +390,29 @@ final class DimController: ObservableObject {
             return
         }
         validationMessage = ""
-        savedBrightness = nil
-        isDimmed = false
-        lastIdleSeconds = Self.idleSeconds()
-        deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
-        remainingSeconds = intervalSeconds
-        startTimer()
         isEnabled = true
+        if mainProtectionActive {
+            startMonitoring()
+        } else {
+            stopMonitoring()
+        }
+    }
+
+    /// Вызывается при включении/выключении режима «Не давать Mac спать»:
+    /// затемнение работает только вместе с этим режимом.
+    func setMainProtectionActive(_ active: Bool) {
+        mainProtectionActive = active
+        guard isEnabled else { return }
+        if active {
+            startMonitoring()
+        } else {
+            stopMonitoring()
+        }
     }
 
     /// Вызывается при изменении значения минут: перезапускает отсчёт без сброса защиты.
     func restartIfActive() {
-        guard isEnabled, !isDimmed, intervalSeconds > 0 else { return }
+        guard isEnabled, mainProtectionActive, !isDimmed, intervalSeconds > 0 else { return }
         deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
     }
 
@@ -404,16 +422,22 @@ final class DimController: ObservableObject {
     }
 
     func shutDown() {
-        stop()
+        stopCompletely()
     }
 
-    private func stop() {
+    /// Полностью выключает функцию (сброс чекбокса).
+    private func stopCompletely() {
+        isEnabled = false
+        stopMonitoring()
+    }
+
+    /// Останавливает отсчёт и снимает затемнение, не трогая состояние чекбокса.
+    private func stopMonitoring() {
         timer?.invalidate()
         timer = nil
         deadline = nil
         remainingSeconds = 0
         restoreBrightness()
-        isEnabled = false
     }
 
     private func startTimer() {
@@ -423,10 +447,11 @@ final class DimController: ObservableObject {
                 self?.tick()
             }
         }
+        tick()
     }
 
     private func tick() {
-        guard isEnabled, deadline != nil else { return }
+        guard isEnabled, mainProtectionActive, deadline != nil else { return }
 
         let idle = Self.idleSeconds()
         // Небольшой допуск, чтобы не считать «потроганием» шум.
@@ -445,19 +470,63 @@ final class DimController: ObservableObject {
         }
     }
 
+    private func startMonitoring() {
+        guard intervalSeconds > 0 else { return }
+        lastIdleSeconds = Self.idleSeconds()
+        deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
+        remainingSeconds = intervalSeconds
+        startTimer()
+    }
+
     private func dimScreen() {
-        if savedBrightness == nil {
-            savedBrightness = CoreDisplay.currentBrightness() ?? 1.0
+        showOverlays()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 2.0
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            for window in overlayWindows {
+                window.animator().alphaValue = Self.maxDimAlpha
+            }
         }
-        CoreDisplay.setUserBrightness(0)
         isDimmed = true
     }
 
     private func restoreBrightness() {
         guard isDimmed else { return }
-        CoreDisplay.setUserBrightness(savedBrightness ?? 1.0)
-        savedBrightness = nil
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.4
+            for window in overlayWindows {
+                window.animator().alphaValue = 0
+            }
+        }
         isDimmed = false
+    }
+
+    /// Полноэкранный чёрный слой поверх всех экранов (окно не перехватывает мышь).
+    /// Яркость подсветки приватными API на современных macOS надёжно менять нельзя,
+    /// поэтому «минимальная яркость» реализуется затемняющим слоем.
+    private func showOverlays() {
+        let screens = NSScreen.screens
+        if overlayWindows.count != screens.count {
+            overlayWindows = screens.map { screen in
+                let window = NSWindow(
+                    contentRect: screen.frame,
+                    styleMask: .borderless,
+                    backing: .buffered,
+                    defer: false,
+                    screen: screen)
+                window.backgroundColor = .black
+                window.isOpaque = false
+                window.alphaValue = 0
+                window.level = .screenSaver
+                window.ignoresMouseEvents = true
+                window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+                return window
+            }
+        }
+        for (window, screen) in zip(overlayWindows, screens) {
+            window.setFrame(screen.frame, display: false)
+            window.orderFrontRegardless()
+        }
     }
 
     /// Секунды с последней активности пользователя (мышь, клавиатура, колесо и т.п.).
@@ -478,31 +547,6 @@ final class DimController: ObservableObject {
         .keyDown,
         .scrollWheel
     ]
-}
-
-/// Доступ к приватному фреймворку CoreDisplay для управления яркостью
-/// (те же функции, что использует системный ползунок яркости).
-@MainActor
-private enum CoreDisplay {
-    private static let handle: UnsafeMutableRawPointer? = {
-        dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY)
-    }()
-
-    static func currentBrightness() -> Float? {
-        guard let handle, let symbol = dlsym(handle, "CoreDisplay_GetUserDisplayBrightness") else {
-            return nil
-        }
-        typealias GetFn = @convention(c) (CGDirectDisplayID) -> Float
-        return unsafeBitCast(symbol, to: GetFn.self)(CGMainDisplayID())
-    }
-
-    static func setUserBrightness(_ value: Float) {
-        guard let handle, let symbol = dlsym(handle, "CoreDisplay_SetUserDisplayBrightness") else {
-            return
-        }
-        typealias SetFn = @convention(c) (CGDirectDisplayID, Float) -> Void
-        unsafeBitCast(symbol, to: SetFn.self)(CGMainDisplayID(), value)
-    }
 }
 
 struct ContentView: View {
@@ -601,7 +645,7 @@ struct ContentView: View {
                             }
                         }
 
-                        if dimController.isEnabled {
+                        if dimController.isEnabled && dimController.mainProtectionActive {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Circle()
                                     .fill(dimController.isDimmed ? Color.orange : Color.blue)
@@ -693,6 +737,9 @@ struct ContentView: View {
         }
         .padding(24)
         .frame(width: 530)
+        .onChange(of: controller.isRunning) { active in
+            dimController.setMainProtectionActive(active)
+        }
         .alert("Не удалось запустить", isPresented: Binding(
             get: { !controller.errorMessage.isEmpty },
             set: { if !$0 { controller.dismissError() } }
