@@ -555,6 +555,11 @@ struct ContentView: View {
 
     @State private var dimSectionExpanded = false
 
+    /// Версия приложения из Info.plist (fallback — текущая версия из репозитория).
+    private static var appVersion: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.4.1d"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 12) {
@@ -734,6 +739,11 @@ struct ContentView: View {
             Text("⌘Q сразу прекращает защиту от сна.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            Text("Версия \(Self.appVersion)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(24)
         .frame(width: 530)
