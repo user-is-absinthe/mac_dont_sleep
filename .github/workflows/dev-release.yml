@@ -1,0 +1,61 @@
+name: Dev build
+
+# Автоматическая dev-сборка: запускается при каждом пуше в ветку dev
+# (а также вручную). Собирает приложение и публикует его в релизы
+# с пометкой "dev" (pre-release с тегом "dev", который обновляется
+# при каждой новой сборке).
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dev-release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
+          SHORT_SHA=${GITHUB_SHA::7}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "Версия приложения: $VERSION (коммит $SHORT_SHA)"
+
+      - name: Build universal app
+        run: ./build_app.command
+
+      - name: Package DMG
+        run: |
+          ./scripts/make_dmg.sh "build/DontSleep-${{ steps.version.outputs.version }}-dev-${{ steps.version.outputs.short_sha }}.dmg"
+
+      - name: Remove previous dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev --yes --cleanup-tag || true
+
+      - name: Create dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create dev \
+            "build/DontSleep-${{ steps.version.outputs.version }}-dev-${{ steps.version.outputs.short_sha }}.dmg" \
+            --target "$GITHUB_SHA" \
+            --title "Don't sleep ${{ steps.version.outputs.version }} (dev)" \
+            --notes "Автоматическая dev-сборка ветки \`dev\`.
+
+          - Версия: ${{ steps.version.outputs.version }}
+          - Коммит: ${{ steps.version.outputs.short_sha }} (\`$GITHUB_SHA\`)
+          - Собрано: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          ⚠️ Это предварительная (pre-release) сборка для тестирования — возможны нестабильности." \
+            --prerelease
