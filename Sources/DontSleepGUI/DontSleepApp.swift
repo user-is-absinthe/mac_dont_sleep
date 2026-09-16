@@ -7,14 +7,17 @@ import UserNotifications
 struct DontSleepApp: App {
     @NSApplicationDelegateAdaptor(NotificationDelegate.self) private var notificationDelegate
     @StateObject private var controller = SleepController()
+    @StateObject private var dimController = DimController()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(controller)
+                .environmentObject(dimController)
                 .background(WindowFrameRestorer())
                 .onAppear {
                     notificationDelegate.sleepController = controller
+                    notificationDelegate.dimController = dimController
                 }
         }
     }
@@ -47,6 +50,7 @@ private extension NSView {
 @MainActor
 final class NotificationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     weak var sleepController: SleepController?
+    weak var dimController: DimController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
@@ -54,6 +58,7 @@ final class NotificationDelegate: NSObject, NSApplicationDelegate, UNUserNotific
 
     func applicationWillTerminate(_ notification: Notification) {
         sleepController?.cancelForApplicationTermination()
+        dimController?.shutDown()
     }
 
     nonisolated func userNotificationCenter(
@@ -327,8 +332,184 @@ final class SleepController: ObservableObject {
     }()
 }
 
+// MARK: - Затемнение экрана по таймеру бездействия
+
+/// Отдельная функция: если включена — после заданного времени бездействия
+/// плавно снижает яркость экрана до минимума. Любая активность пользователя
+/// (мышь, клавиатура, трекпад) возвращает яркость и перезапускает отсчёт.
+@MainActor
+final class DimController: ObservableObject {
+    @Published private(set) var isEnabled = false
+    @Published var minutesText = "5"
+    @Published private(set) var remainingSeconds = 0
+    @Published private(set) var isDimmed = false
+    @Published private(set) var validationMessage = ""
+
+    private var timer: Timer?
+    private var deadline: Date?
+    private var lastIdleSeconds: Double = 0
+    private var savedBrightness: Float?
+
+    var intervalSeconds: Int {
+        let trimmed = minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let minutes = Int(trimmed), minutes > 0 else { return 0 }
+        return minutes * 60
+    }
+
+    var remainingText: String {
+        let hours = remainingSeconds / 3_600
+        let minutes = (remainingSeconds % 3_600) / 60
+        let seconds = remainingSeconds % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    var statusText: String {
+        if isDimmed {
+            return "Экран затемнён — двигайте мышью или нажмите клавишу, чтобы вернуть яркость."
+        }
+        let minutes = intervalSeconds
+        return minutes > 0
+            ? "Экран будет затемнён после \(minutes) мин бездействия. Любая активность перезапускает отсчёт."
+            : "Введите положительное целое число минут."
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard enabled else {
+            stop()
+            return
+        }
+        guard intervalSeconds > 0 else {
+            validationMessage = "Введите положительное целое число минут."
+            return
+        }
+        validationMessage = ""
+        savedBrightness = nil
+        isDimmed = false
+        lastIdleSeconds = Self.idleSeconds()
+        deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
+        remainingSeconds = intervalSeconds
+        startTimer()
+        isEnabled = true
+    }
+
+    /// Вызывается при изменении значения минут: перезапускает отсчёт без сброса защиты.
+    func restartIfActive() {
+        guard isEnabled, !isDimmed, intervalSeconds > 0 else { return }
+        deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
+    }
+
+    func setMinutes(_ minutes: Int) {
+        minutesText = String(minutes)
+        restartIfActive()
+    }
+
+    func shutDown() {
+        stop()
+    }
+
+    private func stop() {
+        timer?.invalidate()
+        timer = nil
+        deadline = nil
+        remainingSeconds = 0
+        restoreBrightness()
+        isEnabled = false
+    }
+
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.tick()
+            }
+        }
+    }
+
+    private func tick() {
+        guard isEnabled, deadline != nil else { return }
+
+        let idle = Self.idleSeconds()
+        // Небольшой допуск, чтобы не считать «потроганием» шум.
+        let hadActivity = idle + 0.05 < lastIdleSeconds
+        lastIdleSeconds = idle
+
+        if hadActivity {
+            if isDimmed { restoreBrightness() }
+            self.deadline = Date().addingTimeInterval(TimeInterval(intervalSeconds))
+        }
+
+        guard let currentDeadline = self.deadline else { return }
+        remainingSeconds = max(0, Int(ceil(currentDeadline.timeIntervalSinceNow)))
+        if remainingSeconds == 0, !isDimmed {
+            dimScreen()
+        }
+    }
+
+    private func dimScreen() {
+        if savedBrightness == nil {
+            savedBrightness = CoreDisplay.currentBrightness() ?? 1.0
+        }
+        CoreDisplay.setUserBrightness(0)
+        isDimmed = true
+    }
+
+    private func restoreBrightness() {
+        guard isDimmed else { return }
+        CoreDisplay.setUserBrightness(savedBrightness ?? 1.0)
+        savedBrightness = nil
+        isDimmed = false
+    }
+
+    /// Секунды с последней активности пользователя (мышь, клавиатура, колесо и т.п.).
+    private static func idleSeconds() -> Double {
+        var result = Double.greatestFiniteMagnitude
+        for eventType in watchedEventTypes {
+            let seconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: eventType)
+            result = min(result, seconds)
+        }
+        return result
+    }
+
+    private static let watchedEventTypes: [CGEventType] = [
+        .mouseMoved,
+        .leftMouseDown, .leftMouseDragged,
+        .rightMouseDown, .rightMouseDragged,
+        .otherMouseDown, .otherMouseDragged,
+        .keyDown,
+        .scrollWheel
+    ]
+}
+
+/// Доступ к приватному фреймворку CoreDisplay для управления яркостью
+/// (те же функции, что использует системный ползунок яркости).
+@MainActor
+private enum CoreDisplay {
+    private static let handle: UnsafeMutableRawPointer? = {
+        dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY)
+    }()
+
+    static func currentBrightness() -> Float? {
+        guard let handle, let symbol = dlsym(handle, "CoreDisplay_GetUserDisplayBrightness") else {
+            return nil
+        }
+        typealias GetFn = @convention(c) (CGDirectDisplayID) -> Float
+        return unsafeBitCast(symbol, to: GetFn.self)(CGMainDisplayID())
+    }
+
+    static func setUserBrightness(_ value: Float) {
+        guard let handle, let symbol = dlsym(handle, "CoreDisplay_SetUserDisplayBrightness") else {
+            return
+        }
+        typealias SetFn = @convention(c) (CGDirectDisplayID, Float) -> Void
+        unsafeBitCast(symbol, to: SetFn.self)(CGMainDisplayID(), value)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var controller: SleepController
+    @EnvironmentObject private var dimController: DimController
+
+    @State private var dimSectionExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -387,6 +568,67 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(4)
+            }
+
+            // Раздвижная секция затемнения (по умолчанию свёрнута/скрыта)
+            GroupBox {
+                DisclosureGroup(isExpanded: $dimSectionExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: Binding(
+                            get: { dimController.isEnabled },
+                            set: { dimController.setEnabled($0) }
+                        )) {
+                            Text("Затемнять экран после бездействия")
+                        }
+
+                        HStack(spacing: 8) {
+                            TextField("Например, 5", text: $dimController.minutesText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 132)
+                                .disabled(dimController.isEnabled)
+                                .onChange(of: dimController.minutesText) { _ in
+                                    dimController.restartIfActive()
+                                }
+                            Text("минут бездействия")
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach([1, 5, 15], id: \.self) { minutes in
+                                Button("\(minutes) мин") {
+                                    dimController.setMinutes(minutes)
+                                }
+                                .disabled(dimController.isEnabled)
+                            }
+                        }
+
+                        if dimController.isEnabled {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Circle()
+                                    .fill(dimController.isDimmed ? Color.orange : Color.blue)
+                                    .frame(width: 8, height: 8)
+                                Text(dimController.isDimmed
+                                    ? "Экран затемнён"
+                                    : "До затемнения осталось")
+                                    .foregroundStyle(.secondary)
+                                if !dimController.isDimmed {
+                                    Spacer()
+                                    Text(dimController.remainingText)
+                                        .font(.system(.body, design: .monospaced).weight(.medium))
+                                }
+                            }
+                        }
+
+                        Text(dimController.validationMessage.isEmpty
+                            ? dimController.statusText
+                            : dimController.validationMessage)
+                            .font(.footnote)
+                            .foregroundStyle(dimController.validationMessage.isEmpty ? Color.secondary : Color.red)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                } label: {
+                    Label("Затемнение экрана по таймеру", systemImage: "sun.min")
+                }
             }
 
             GroupBox("Статус") {
