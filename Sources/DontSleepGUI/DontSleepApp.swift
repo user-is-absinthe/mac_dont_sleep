@@ -567,20 +567,39 @@ final class DimController: ObservableObject {
 struct StatusBarIconView: View {
     @ObservedObject var controller: SleepController
 
+    private static let idleIcon = makeIcon(
+        name: "StatusBarIdle", fallbackSymbol: "cup.and.saucer")
+    private static let awakeIcon = makeIcon(
+        name: "StatusBarAwake", fallbackSymbol: "cup.and.saucer.fill")
+
     var body: some View {
-        if controller.isRunning {
-                Image("StatusBarAwake", bundle: .main)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-            } else {
-                Image("StatusBarIdle", bundle: .main)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-            }
+        Image(nsImage: controller.isRunning ? Self.awakeIcon : Self.idleIcon)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
+    }
+
+    /// Загружает PNG из ресурсов .app и делает его template-иконкой
+    /// (система сама подкрашивает под светлую/тёмную меню-бар).
+    /// Если файла нет — используется системный символ.
+    private static func makeIcon(name: String, fallbackSymbol: String) -> NSImage {
+        let image: NSImage?
+        if let url = Bundle.main.url(forResource: name, withExtension: "png") {
+            image = NSImage(contentsOf: url)
+        } else {
+            image = nil
+        }
+        if let image {
+            image.isTemplate = true
+            image.size = NSSize(width: 18, height: 18)
+            return image
+        }
+        let symbol = NSImage(
+            systemSymbolName: fallbackSymbol,
+            accessibilityDescription: nil
+        ) ?? NSImage()
+        symbol.isTemplate = true
+        return symbol
     }
 }
 

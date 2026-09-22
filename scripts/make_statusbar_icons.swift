@@ -69,9 +69,11 @@ func makeIcon(_ job: Job, outputSize: Int = 72) throws {
             let b = Int(pixels[offset + 2])
             let luminance = (299 * r + 587 * g + 114 * b) / 1000
             let alpha = max(0, min(255, (luminance - 10) * 255 / 200))
-            pixels[offset] = 255
-            pixels[offset + 1] = 255
-            pixels[offset + 2] = 255
+            // Валидные premultiplied значения: белый глиф → RGB = альфа.
+            // (RGB > alpha ломает отрисовку: CoreGraphics поднимает альфу.)
+            pixels[offset] = UInt8(alpha)
+            pixels[offset + 1] = UInt8(alpha)
+            pixels[offset + 2] = UInt8(alpha)
             pixels[offset + 3] = UInt8(alpha)
             if luminance > 30 {
                 minX = min(minX, x); maxX = max(maxX, x)
