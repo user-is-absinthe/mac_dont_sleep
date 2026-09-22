@@ -29,6 +29,8 @@ lipo -create \
   -output "$APP_PATH/Contents/MacOS/DontSleep"
 cp "$SCRIPT_DIR/Resources/Info.plist" "$APP_PATH/Contents/Info.plist"
 cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_PATH/Contents/Resources/AppIcon.icns"
+cp "$SCRIPT_DIR/Resources/StatusBarIdle.png" "$APP_PATH/Contents/Resources/StatusBarIdle.png"
+cp "$SCRIPT_DIR/Resources/StatusBarAwake.png" "$APP_PATH/Contents/Resources/StatusBarAwake.png"
 codesign --force --sign - "$APP_PATH"
 
 echo "Готово: $APP_PATH"

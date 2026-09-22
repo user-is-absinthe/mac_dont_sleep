@@ -34,7 +34,7 @@
 Приложение подписано ad-hoc-подписью (без Apple Developer ID), поэтому при первом запуске скачанной копии macOS может показать предупреждение системы безопасности Gatekeeper. Снимите карантин командой:
 
 ```zsh
-xattr -cr "/Applications/Don't sleep.app"
+sudo xattr -cr "/Applications/Don't sleep.app"
 ```
 
 ## Сборка и запуск
