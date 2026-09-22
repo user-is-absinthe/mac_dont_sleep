@@ -10,7 +10,7 @@ struct DontSleepApp: App {
     @StateObject private var dimController = DimController()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
                 .environmentObject(controller)
                 .environmentObject(dimController)
@@ -18,8 +18,18 @@ struct DontSleepApp: App {
                 .onAppear {
                     notificationDelegate.sleepController = controller
                     notificationDelegate.dimController = dimController
+                    dimController.sleepController = controller
                 }
         }
+
+        MenuBarExtra {
+            MenuBarPanel()
+                .environmentObject(controller)
+                .environmentObject(dimController)
+        } label: {
+            StatusBarIconView(controller: controller)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -167,6 +177,13 @@ final class SleepController: ObservableObject {
     func setMinutes(_ minutes: Int) {
         guard !isRunning else { return }
         minutesText = String(minutes)
+    }
+
+    /// Быстрый запуск из меню статус-бара: задаёт длительность и стартует.
+    func start(minutes: Int) {
+        guard !isRunning else { return }
+        minutesText = String(minutes)
+        start()
     }
 
     func start() {
@@ -346,13 +363,19 @@ final class DimController: ObservableObject {
     @Published var minutesText = "5"
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var isDimmed = false
-    @Published private(set) var mainProtectionActive = false
     @Published private(set) var validationMessage = ""
+
+    /// Затемнение работает только при активном режиме «Не давать Mac спать».
+    weak var sleepController: SleepController?
 
     private var timer: Timer?
     private var deadline: Date?
     private var lastIdleSeconds: Double = 0
     private var overlayWindows: [NSWindow] = []
+
+    var mainProtectionActive: Bool {
+        sleepController?.isRunning ?? false
+    }
 
     var intervalSeconds: Int {
         let trimmed = minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -392,18 +415,6 @@ final class DimController: ObservableObject {
         validationMessage = ""
         isEnabled = true
         if mainProtectionActive {
-            startMonitoring()
-        } else {
-            stopMonitoring()
-        }
-    }
-
-    /// Вызывается при включении/выключении режима «Не давать Mac спать»:
-    /// затемнение работает только вместе с этим режимом.
-    func setMainProtectionActive(_ active: Bool) {
-        mainProtectionActive = active
-        guard isEnabled else { return }
-        if active {
             startMonitoring()
         } else {
             stopMonitoring()
@@ -547,6 +558,110 @@ final class DimController: ObservableObject {
         .keyDown,
         .scrollWheel
     ]
+}
+
+// MARK: - Иконка и меню статус-бара
+
+/// Иконка в меню-баре: спящая чашка, когда Mac может уснуть,
+/// и дымящаяся — пока защита от сна активна.
+struct StatusBarIconView: View {
+    @ObservedObject var controller: SleepController
+
+    var body: some View {
+        if controller.isRunning {
+                Image("StatusBarAwake", bundle: .main)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
+            } else {
+                Image("StatusBarIdle", bundle: .main)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
+            }
+    }
+}
+
+/// Панель меню статус-бара (стиль .window).
+struct MenuBarPanel: View {
+    @EnvironmentObject private var controller: SleepController
+    @EnvironmentObject private var dimController: DimController
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            menuRow(icon: "macwindow", title: "Открыть приложение") {
+                openWindow(id: "main")
+            }
+
+            Divider()
+                .padding(.vertical, 4)
+
+            if controller.isRunning {
+                menuRow(icon: "stop.circle", title: "Остановить — осталось \(controller.remainingText)") {
+                    controller.cancel()
+                }
+            } else {
+                menuRow(icon: "cup.and.saucer.fill", title: "Не спать 15 минут") {
+                    controller.start(minutes: 15)
+                }
+                menuRow(icon: "cup.and.saucer.fill", title: "Не спать 30 минут") {
+                    controller.start(minutes: 30)
+                }
+                menuRow(icon: "cup.and.saucer.fill", title: "Не спать 60 минут") {
+                    controller.start(minutes: 60)
+                }
+                menuRow(icon: "cup.and.saucer.fill", title: "Не спать 120 минут") {
+                    controller.start(minutes: 120)
+                }
+            }
+
+            Divider()
+                .padding(.vertical, 4)
+
+            Toggle("Не гасить экран", isOn: $controller.keepDisplayAwake)
+                .toggleStyle(.checkbox)
+                .disabled(controller.isRunning)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+
+            Toggle(isOn: Binding(
+                get: { dimController.isEnabled },
+                set: { dimController.setEnabled($0) }
+            )) {
+                Text("Затемнять экран")
+            }
+            .toggleStyle(.checkbox)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+
+            Divider()
+                .padding(.vertical, 4)
+
+            menuRow(icon: "power", title: "Выход") {
+                NSApp.terminate(nil)
+            }
+        }
+        .padding(10)
+        .frame(width: 270)
+    }
+
+    private func menuRow(
+        icon: String,
+        title: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
 }
 
 struct ContentView: View {
@@ -747,9 +862,6 @@ struct ContentView: View {
         }
         .padding(24)
         .frame(width: 530)
-        .onChange(of: controller.isRunning) { active in
-            dimController.setMainProtectionActive(active)
-        }
         .alert("Не удалось запустить", isPresented: Binding(
             get: { !controller.errorMessage.isEmpty },
             set: { if !$0 { controller.dismissError() } }
