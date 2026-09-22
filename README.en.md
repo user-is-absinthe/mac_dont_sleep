@@ -34,7 +34,7 @@ Prebuilt binaries are available on the [Releases](https://github.com/user-is-abs
 The app is ad-hoc signed (no Apple Developer ID), so macOS may show a Gatekeeper warning the first time you open a downloaded copy. Remove the quarantine flag with:
 
 ```zsh
-xattr -cr "/Applications/Don't sleep.app"
+sudo xattr -cr "/Applications/Don't sleep.app"
 ```
 
 ## Build and run

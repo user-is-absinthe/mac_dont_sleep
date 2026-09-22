@@ -691,7 +691,7 @@ struct ContentView: View {
 
     /// Версия приложения из Info.plist (fallback — текущая версия из репозитория).
     private static var appVersion: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.4.0"
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.5.2d"
     }
 
     var body: some View {

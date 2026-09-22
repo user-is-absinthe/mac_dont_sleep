@@ -47,15 +47,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          {
+            printf '%s\n\n' "Автоматическая dev-сборка ветки \`dev\`."
+            printf -- '- Версия: %s\n' "${{ steps.version.outputs.version }}"
+            printf -- '- Коммит: %s (%s)\n' "${{ steps.version.outputs.short_sha }}" "$GITHUB_SHA"
+            printf -- '- Собрано: %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
+            printf '\n%s\n\n' "⚠️ Это предварительная (pre-release) сборка для тестирования — возможны нестабильности."
+            printf '%s\n\n```zsh\nsudo xattr -cr "%s"\n```\n' \
+              "После установки снимите карантин Gatekeeper (скопируйте команду целиком):" \
+              "/Applications/Don't sleep.app"
+          } > /tmp/notes.md
           gh release create dev \
             "build/DontSleep-${{ steps.version.outputs.version }}-dev-${{ steps.version.outputs.short_sha }}.dmg" \
             --target "$GITHUB_SHA" \
             --title "Don't sleep ${{ steps.version.outputs.version }} (dev)" \
-            --notes "Автоматическая dev-сборка ветки \`dev\`.
-
-          - Версия: ${{ steps.version.outputs.version }}
-          - Коммит: ${{ steps.version.outputs.short_sha }} (\`$GITHUB_SHA\`)
-          - Собрано: $(date -u '+%Y-%m-%d %H:%M UTC')
-
-          ⚠️ Это предварительная (pre-release) сборка для тестирования — возможны нестабильности." \
+            --notes-file /tmp/notes.md \
             --prerelease

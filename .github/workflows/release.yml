@@ -25,7 +25,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          printf '%s\n\n```zsh\nsudo xattr -cr "%s"\n```\n' \
+            "После установки снимите карантин Gatekeeper (скопируйте команду целиком):" \
+            "/Applications/Don't sleep.app" \
+            > /tmp/notes.md
           gh release create "$GITHUB_REF_NAME" \
             "build/DontSleep-${GITHUB_REF_NAME}.dmg" \
             --title "Don't sleep ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md \
             --generate-notes
